@@ -166,7 +166,29 @@ impl VfsNodeOps for DirNode {
     }
 
     fn rename(&self, _src: &str, _dst: &str) -> VfsResult {
-        todo!("Implement rename for ramfs!");
+        // _src 已经被解析为DirNode，那么这里的 self 其实就是 FileNode 的父级？
+        // /tmp/aaa/f1 => /tmp/aaa/f1 这样是过不了的，证明上述理解是错误的，具体是哪里干掉了tmp？
+        // 在当前节点底下操作文件重命名，即去操作 self 的子级 children
+        // 由于要求是同级目录下修改文件名称即可，所以目录路径是不用变的
+        // 那么其实就是移除旧的文件名，插入新的文件名即可
+        // key 是文件名的字符串，value 是描述此文件节点的 node 对象
+        // 那就是成了以 key 拿到 node，移除 key，然后以新的 key 插入 node 即可
+
+        let (src_name, src_path) = split_path(_src);  // f1 None
+        let (dst_name, dst_path) = split_path(_dst);  // tmp Some(f2)
+        log::warn!("{} {:?}", src_name, src_path);
+        log::warn!("{} {:?}", dst_name, dst_path);
+
+        // 需要再处理下才能拿到文件名
+        let (new, dist_path) = split_path(dst_path.unwrap());  // 再进一次，拿到 f2 None
+        log::warn!("{} {:?}", dst_name, dst_path);
+        // 以上逻辑已被证明是不能处理更深层级的重命名的，只对当前指定场景和约束条件有效，还是 ramfs 本身就设计为不需要多级？
+
+        let mut children = self.children.write();
+        let node = children.get(src_name).ok_or(VfsError::NotFound)?.clone();
+        children.remove(src_name);
+        children.insert(new.into(), node);
+        Ok(())
     }
 
     axfs_vfs::impl_vfs_dir_default! {}
